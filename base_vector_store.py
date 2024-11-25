@@ -1,7 +1,11 @@
+# Return type
 from llama_index.core.schema import BaseNode, NodeWithScore, TextNode
-from qdrant_client.models import ScoredPoint, QueryResponse
+from langchain_core.documents.base import Document
+# Qdrant Components
+from qdrant_client.models import ScoredPoint
 from qdrant_client import models
-from typing import List, Sequence, Literal
+# Other components
+from typing import List, Sequence, Literal, Union
 
 Embedding = List[float]
 
@@ -45,7 +49,7 @@ class BaseVectorStore:
         return quantization_config
 
     @staticmethod
-    def _convert_documents_to_payloads(documents: Sequence[BaseNode]) -> list[dict]:
+    def _convert_documents_to_payloads(documents: Union[Sequence[BaseNode], Sequence[Document]]) -> list[dict]:
         """
         Construct the payload data from LlamaIndex document/node datatype
 
@@ -54,24 +58,33 @@ class BaseVectorStore:
         Returns:
             Payloads (list[dict]).
         """
+        # LlamaIndex BaseNode case
+        if isinstance(documents[0],BaseNode):
+            # Define input type
+            # documents = Sequence[BaseNode]
 
-        # Clear private data from payload
-        for i in range(len(documents)):
-            documents[i].embedding = None
-            # Pop file path
-            documents[i].metadata["file_path"] = "",
-            # documents[i].excluded_embed_metadata_keys = []
-            # documents[i].excluded_llm_metadata_keys = []
-            # Remove metadata in relationship
-            for key in documents[i].relationships.keys():
-                documents[i].relationships[key].metadata = {}
+            # Clear private data from payload
+            for i in range(len(documents)):
+                documents[i].embedding = None
+                # Pop file path
+                documents[i].metadata["file_path"] = "",
+                # documents[i].excluded_embed_metadata_keys = []
+                # documents[i].excluded_llm_metadata_keys = []
+                # Remove metadata in relationship
+                for key in documents[i].relationships.keys():
+                    documents[i].relationships[key].metadata = {}
 
-        # Get payloads
-        payloads = [{"_node_content": document.dict(),
-                     "_node_type": document.class_name(),
-                     "doc_id": document.id_,
-                     "document_id": document.id_,
-                     "ref_doc_id": document.id_} for document in documents]
+            # Get payloads
+            payloads = [{"_node_content": document.dict(),
+                         "_node_type": document.class_name(),
+                         "doc_id": document.id_,
+                         "document_id": document.id_,
+                         "ref_doc_id": document.id_} for document in documents]
+        else:
+            # Langchain Document case
+            payloads = [{"page_content": document.page_content,
+                         "metadata": document.metadata,
+                         "_node_type": document.type} for document in documents]
         return payloads
 
     @staticmethod
@@ -91,16 +104,16 @@ class BaseVectorStore:
         return [NodeWithScore(node=text_nodes[i], score=point.score) for (i, point) in enumerate(scored_points)]
 
     @staticmethod
-    def _convert_query_response_to_node_with_score(scored_points: List[QueryResponse]) -> Sequence[NodeWithScore]:
+    def _convert_score_point_to_document(scored_points: List[ScoredPoint]) -> Sequence[Document]:
         """
-        Convert QueryResponse Datatype (Qdrant) to NodeWithScore Datatype (LlamaIndex)
+        Convert ScorePoint Datatype (Qdrant) to Document Datatype (LlamaIndex)
 
         Args:
-            scored_points (List[QueryResponse]): List of QueryResponse
+            scored_points (List[ScoredPoint]): List of ScoredPoint
         Returns:
-            Sequence of NodeWithScore"""
+            Sequence of NodeWithScore
+        """
 
-        # Define text nodes
-        text_nodes = [TextNode.from_dict(point.metadata["_node_content"]) for point in scored_points]
-        # return NodeWithScore
-        return [NodeWithScore(node=text_nodes[i], score=point.score) for (i, point) in enumerate(scored_points)]
+        return [Document(page_content = point.payload["page_content"],
+                         metadata = point.payload["metadata"],
+                         id = point.id) for point in scored_points]

@@ -1,9 +1,16 @@
+# Qdrant components
 from qdrant_client import QdrantClient, models
 from qdrant_client.models import Distance, VectorParams,Filter
+# Document type
 from llama_index.core.schema import BaseNode, NodeWithScore
+from langchain_core.documents.base import Document
+# Embedding type
 from llama_index.core.base.embeddings.base import BaseEmbedding
-from typing import Optional, Union, List, Sequence, Literal
+from langchain_core.embeddings import Embeddings
+# Inheritance
 from .base_vector_store import BaseVectorStore
+# Other components
+from typing import Optional, Union, List, Sequence, Literal
 from uuid import uuid4
 # DataType
 Num = Union[int, float]
@@ -13,7 +20,7 @@ _DEFAULT_UPLOAD_BATCH_SIZE = 16
 
 class QdrantVectorStore(BaseVectorStore):
     def __init__(self,
-                 dense_embedding_model: BaseEmbedding,
+                 dense_embedding_model: Union[BaseEmbedding,Embeddings],
                  collection_name: str = "qdrant_vector_store",
                  url :str = "http://localhost:6333",
                  port :int = 6333,
@@ -87,15 +94,26 @@ class QdrantVectorStore(BaseVectorStore):
         Returns:
              Return list of Embedding
         """
-        # Set batch size and num workers
-        self.__dense_embedding_model.num_workers = num_workers
-        self.__dense_embedding_model.embed_batch_size = batch_size
-        # Other information
-        model_infor = self.__dense_embedding_model.dict()
-        callback_manager = self.__dense_embedding_model.callback_manager
-        # Return embedding
-        return self.__dense_embedding_model.get_text_embedding_batch(texts = texts,
-                                                                     show_progress = show_progress)
+        # Base Embedding encode text
+        if isinstance(self.__dense_embedding_model,BaseEmbedding):
+            # Re-defined model
+            self.__dense_embedding_model :BaseEmbedding
+            # Set batch size and num workers
+            self.__dense_embedding_model.num_workers = num_workers
+            self.__dense_embedding_model.embed_batch_size = batch_size
+
+            # Other information
+            model_infor = self.__dense_embedding_model.dict()
+            callback_manager = self.__dense_embedding_model.callback_manager
+            # Return embedding
+            embeddings = self.__dense_embedding_model.get_text_embedding_batch(texts = texts,
+                                                                               show_progress = show_progress)
+        else:
+            # Langchain Embedding
+            self.__dense_embedding_model :Embeddings
+            # Return embedding
+            embeddings = self.__dense_embedding_model.embed_documents(texts = texts)
+        return embeddings
 
     def __create_collection(self,
                             dense_vectors_config: Union[VectorParams,dict],
@@ -127,7 +145,10 @@ class QdrantVectorStore(BaseVectorStore):
                                                             indexing_threshold = 0)
 
             # Define dense config
-            dense_vectors_config = {self.__dense_embedding_model.model_name :dense_vectors_config}
+            if isinstance(self.__dense_embedding_model, BaseEmbedding):
+                dense_vectors_config = {self.__dense_embedding_model.model_name :dense_vectors_config}
+            else:
+                dense_vectors_config = {self.__dense_embedding_model.model: dense_vectors_config}
 
             # Create collection
             self._client.create_collection(
@@ -168,7 +189,13 @@ class QdrantVectorStore(BaseVectorStore):
         if point_ids == None: point_ids = [str(uuid4()) for i in range(len(list_embeddings))]
 
         # Define model name
-        model_name = self.__dense_embedding_model.model_name
+        if isinstance(self.__dense_embedding_model, BaseEmbedding):
+            # LlamaIndex Base Embedding with model name
+            model_name = self.__dense_embedding_model.model_name
+        else:
+            # Langchain Embeddings with model name
+            model_name = self.__dense_embedding_model.model
+
         # Define point
         points = [models.PointStruct(id = point_ids[i],
                                      vector = {model_name: embedding},
@@ -181,7 +208,7 @@ class QdrantVectorStore(BaseVectorStore):
                                    parallel = parallel)
 
     def insert_documents(self,
-                         documents :Sequence[BaseNode],
+                         documents :Union[Sequence[BaseNode],Sequence[Document]],
                          embedded_batch_size: int = 32,
                          embedded_num_workers: Optional[int] = None,
                          upload_batch_size: int = 16,
@@ -189,8 +216,8 @@ class QdrantVectorStore(BaseVectorStore):
         """
         Insert document to specified collection.
 
-        :param documents: List of BaseNode.
-        :type documents: Sequence[BaseNode]
+        :param documents: A sequence of BaseNode( LlamaIndex) or Document(Langchain) for uploading.
+        :type documents: Union[Sequence[BaseNode],Sequence[Document]]
         :param embedded_batch_size: Batch size for embedding model. Default is 64.
         :type embedded_batch_size: int
         :param embedded_num_workers: Batch size for embedding model (Optional). Default is None.
@@ -200,14 +227,22 @@ class QdrantVectorStore(BaseVectorStore):
         :param upload_parallel: Number of parallel for uploading point (Optional). Default is None.
         :type upload_parallel: Optional[int]
         """
-        # Get content and its embedding
-        contents = [doc.get_content() for doc in documents]
+        # Check length of document
+        if len(documents) == 0:
+            assert "Documents is empty"
 
-        # Process text embedding with LlamaIndex Embedding
+        # Get content
+        if isinstance(documents[0],BaseNode):
+            # LlamaIndex BaseNode case
+            contents = [doc.get_content() for doc in documents]
+        else:
+            # Langchain Document case
+            contents = [doc.page_content for doc in documents]
+
+        # Embed vector for each content
         embeddings = self._embed_texts(texts = contents,
                                        batch_size = embedded_batch_size,
                                        num_workers = embedded_num_workers)
-
         # Get embedding dimension
         embedding_dimension = len(embeddings[0])
         # Define vector config
@@ -231,14 +266,14 @@ class QdrantVectorStore(BaseVectorStore):
                              batch_size = upload_batch_size,
                              parallel = upload_parallel)
 
-    def __query(self,
-                query: str,
-                similarity_top_k: int = 3,
-                condition_filter: Optional[Filter] = None,
-                score_threshold :Optional[float] = None,
-                rescore :bool = True,
-                return_type :Literal["NodeWithScore","default"] = "NodeWithScore"
-                ) -> Union[Sequence[NodeWithScore],List[models.ScoredPoint],List[models.QueryResponse]]:
+    def retrieve(self,
+                 query: str,
+                 similarity_top_k: int = 3,
+                 condition_filter: Optional[Filter] = None,
+                 score_threshold: Optional[float] = None,
+                 rescore: bool = True,
+                 return_type: Literal["ScoredPoints","auto"] = "auto"
+                 ) -> Union[Sequence[models.ScoredPoint],Sequence[Document],Sequence[NodeWithScore]]:
         """
         Retrieve nodes from vector store corresponding to question.
 
@@ -253,46 +288,6 @@ class QdrantVectorStore(BaseVectorStore):
         :return: Return a sequence of NodeWithScore
         :rtype Sequence[NodeWithScore]
         """
-        # Get query embedding with Llama Embedding
-        query_embedding = self.__dense_embedding_model.get_query_embedding(query = query)
-
-        # Default value
-        search_params = None
-        # Disable rescore method
-        if not rescore:
-            search_params = models.SearchParams(
-                quantization = models.QuantizationSearchParams(rescore = False)
-            )
-        # Model name
-        model_name = self.__dense_embedding_model.model_name
-        query_vector = (model_name, query_embedding)
-
-        # Return search
-        scored_points = self._client.search(collection_name = self.__collection_name,
-                                            query_vector = query_vector,
-                                            limit = similarity_top_k,
-                                            search_params = search_params,
-                                            query_filter = condition_filter,
-                                            score_threshold = score_threshold)
-        # Convert to node with score
-        return self._convert_score_point_to_node_with_score(scored_points = scored_points) if return_type == "NodeWithScore" else scored_points
-
-    def retrieve(self,
-                 query: str,
-                 similarity_top_k: int = 3,
-                 condition_filter: Optional[Filter] = None) -> Sequence[NodeWithScore]:
-        """
-        Retrieve nodes from vector store corresponding to question.
-
-        :param query: The query str for retrieve (Required)
-        :type query: str
-        :param similarity_top_k: Default is 3. Return top-k element from retrieval.
-        :type similarity_top_k: int
-        :param condition_filter: Conditional filter for searching. Default is None
-        :type condition_filter: Filter
-        :return: Return a sequence of NodeWithScore
-        :rtype Sequence[NodeWithScore]
-        """
 
         # Check base collection
         if not self._client.collection_exists(self.__collection_name):
@@ -303,11 +298,51 @@ class QdrantVectorStore(BaseVectorStore):
         if count_points == 0:
             raise Exception(f"Collection {self.__collection_name} is empty!")
 
-        # Enable base search
-        return self.__query(query = query,
-                            similarity_top_k = similarity_top_k,
-                            condition_filter = condition_filter,
-                            return_type = "NodeWithScore")
+        # Get query embedding
+        if isinstance(self.__dense_embedding_model, BaseEmbedding):
+            # LlamaIndex BaseEmbedding
+            self.__dense_embedding_model: BaseEmbedding
+            # Query embeddings
+            query_embedding = self.__dense_embedding_model.get_query_embedding(query = query)
+            # Model name
+            model_name = self.__dense_embedding_model.model_name
+        else:
+            # Langchain Embeddings
+            self.__dense_embedding_model: Embeddings
+            # Query embeddings
+            query_embedding = self.__dense_embedding_model.embed_query(text = query)
+            # Model name
+            model_name = self.__dense_embedding_model.model
+
+        # Default value
+        search_params = None
+        # Disable rescore method
+        if not rescore:
+            search_params = models.SearchParams(
+                quantization = models.QuantizationSearchParams(rescore = False)
+            )
+        # Model name
+        query_vector = (model_name, query_embedding)
+
+        # Get result from retrieving
+        scored_points = self._client.search(collection_name = self.__collection_name,
+                                            query_vector = query_vector,
+                                            limit = similarity_top_k,
+                                            search_params = search_params,
+                                            query_filter = condition_filter,
+                                            score_threshold = score_threshold)
+        # Return Scored Points
+        if return_type == "ScoredPoints":
+            return scored_points
+        elif return_type == "auto":
+            # Get node type
+            node_type = scored_points[0].payload["_node_type"]
+            if node_type == "Document":
+                # Langchain Document case
+                return self._convert_score_point_to_document(scored_points = scored_points)
+            # LlamaIndex NodeWithScore case
+            return self._convert_score_point_to_node_with_score(scored_points = scored_points)
+        # Interchangeable cases (ScoredPoint -> Document/NodeWithScore)
 
     def _count_points(self) -> int:
         """Return the total amount of point inside collection"""
