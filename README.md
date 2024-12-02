@@ -19,7 +19,7 @@ pip install -r requirements.txt
 # 📃 To-do List:
 - [x] Synchronous Qdrant Vector Store with supports by LlamaIndex BaseEmbedding <mark>(20/11)</mark>.
 - [x] Integrate with Langchain Embedding <mark>(25/11)</mark>.
-- [ ] Sparse embedding search.
+- [x] Sparse embedding search <mark>(03/12)</mark>.
 - [ ] Hybrid Search mode (combined both dense and sprase for searching).
 - [ ] Insert documents with pretrained embedding vector. 
 - [ ] Asynchronous Qdrant Vector Store.
