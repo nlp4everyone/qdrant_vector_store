@@ -4,16 +4,21 @@ from langchain_core.documents.base import Document
 # Qdrant Components
 from qdrant_client.models import ScoredPoint
 from qdrant_client import models
+# Embedding package
+from fastembed import SparseTextEmbedding, SparseEmbedding
+from rank_bm25 import BM25Okapi
+from llama_index.core.base.embeddings.base import BaseEmbedding
+from langchain_core.embeddings import Embeddings
 # Other components
-from typing import List, Sequence, Literal, Union
+from typing import List, Sequence, Literal, Union, Optional
+import pickle, os
 
 Embedding = List[float]
 
 class BaseVectorStore:
     @staticmethod
-    def _get_quantization_config(
-                                 quantization_mode: Literal['binary', 'scalar', 'product', 'none'] = "scalar",
-                                 always_ram :bool = True):
+    def get_quantization_config(quantization_mode: Literal['binary', 'scalar', 'product', 'none'] = "scalar",
+                                always_ram :bool = True):
         """
         Get quantization config with mode
         :param quantization_mode: Include scalar, binary and product.
@@ -47,6 +52,52 @@ class BaseVectorStore:
                 ),
             )
         return quantization_config
+
+    @staticmethod
+    def embed_sparse_text(contents :List[str],
+                          fastembed_model :SparseTextEmbedding,
+                          batch_size :int = 32,
+                          parallel :int = 1) -> List[SparseEmbedding]:
+        """
+
+        :param backends: Select backend for sparse embedding. Default is default (Required fastembed_model model)
+        :param fastembed_model: Fastembed sparse embedding model (Optional)
+        :param batch_size: Batch size for embed (int)
+        :param parallel: Number of parallel processing (int)
+        :return:
+        """
+        # Check backend
+        # Fastembed case
+        return list(fastembed_model.embed(documents = contents))
+
+    @staticmethod
+    def get_dense_embedding_config(embedding_dimension :int,
+                                   distance :models.Distance,
+                                   on_disk :bool,
+                                   dense_embedding_model :Union[BaseEmbedding,Embeddings],
+                                   datatype :models.Datatype = models.Datatype.FLOAT16) -> dict:
+        # Define vector config
+        dense_vectors_config = models.VectorParams(size = embedding_dimension,
+                                                   distance = distance,
+                                                   on_disk = on_disk,
+                                                   hnsw_config = models.HnswConfigDiff(on_disk = on_disk),
+                                                   datatype = datatype)
+
+        # Define config with BaseEmbedding
+        if isinstance(dense_embedding_model, BaseEmbedding):
+            return {dense_embedding_model.model_name : dense_vectors_config}
+        # Return config with Embeddings Langchain
+        return {dense_embedding_model.model: dense_vectors_config}
+
+    @staticmethod
+    def get_sparse_embedding_config(sparse_embedding_model: SparseTextEmbedding,
+                                    datatype :models.Datatype) -> dict:
+        # Define sparse model name
+        sparse_model_name = sparse_embedding_model.model_name
+        # Return config
+        return {sparse_model_name: models.SparseVectorParams(
+            index = models.SparseIndexParams(datatype = datatype)
+        )}
 
     @staticmethod
     def _convert_documents_to_payloads(documents: Union[Sequence[BaseNode], Sequence[Document]]) -> list[dict]:
