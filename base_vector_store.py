@@ -6,7 +6,6 @@ from qdrant_client.models import ScoredPoint
 from qdrant_client import models
 # Embedding package
 from fastembed import SparseTextEmbedding, SparseEmbedding
-from rank_bm25 import BM25Okapi
 from llama_index.core.base.embeddings.base import BaseEmbedding
 from langchain_core.embeddings import Embeddings
 # Other components
