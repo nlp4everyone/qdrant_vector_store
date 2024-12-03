@@ -22,6 +22,6 @@ pip install -r requirements.txt
 - [x] Sparse embedding search <mark>(02/12)</mark>.
 - [x] Asynchronous Qdrant Vector Store <mark>(03/12)</mark>.
 - [x] Build-in Hybrid Queries <mark>(03/12)</mark>.
-- [ ] Batch search.
+- [x] Batch search <mark>(03/12)</mark>.
 - [ ] Multi-modal supports.
 <br />
