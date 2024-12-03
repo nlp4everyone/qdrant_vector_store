@@ -10,11 +10,54 @@ from llama_index.core.base.embeddings.base import BaseEmbedding
 from langchain_core.embeddings import Embeddings
 # Other components
 from typing import List, Sequence, Literal, Union, Optional
-import pickle, os
+import requests
 
 Embedding = List[float]
 
 class BaseVectorStore:
+    def __init__(self,
+                 dense_embedding_model: Union[BaseEmbedding, Embeddings],
+                 url :str = "http://localhost:6333",
+                 sparse_embedding_model: Optional[SparseTextEmbedding] = None,
+                 collection_name: str = "qdrant_vector_store",
+                 distance: models.Distance = models.Distance.COSINE,
+                 shard_number: int = 2,
+                 quantization_mode: Literal['binary', 'scalar', 'product', 'none'] = "scalar",
+                 default_segment_number: int = 4,
+                 on_disk: bool = True,
+                 sparse_datatype: models.Datatype = models.Datatype.FLOAT16):
+        # Collection name
+        self.__collection_name = collection_name
+        # Optimization params
+        self.__on_disk = on_disk
+        self.__distance = distance
+        self.__shard_number = shard_number
+        self.__quantization_mode = quantization_mode
+        self.__default_segment_number = default_segment_number
+
+        # Embedding model
+        self.__dense_embedding_model = dense_embedding_model
+        self.__sparse_embedding_model = sparse_embedding_model
+        # Datatype
+        self._sparse_datatype = sparse_datatype
+        # Url
+        self._url = url
+        # Check health
+        if not self.check_health():
+            raise Exception(f"Server with url: {self._url} not available!")
+
+    def check_health(self):
+        try:
+            # Replace with your Qdrant host and port
+            health_url = self._url + "/health"
+            # Make request to check status
+            response = requests.get(health_url)
+            # Return status
+            return True if response.status_code == 200 else False
+        except requests.exceptions.RequestException as e:
+            # Return status
+            return False
+
     @staticmethod
     def get_quantization_config(quantization_mode: Literal['binary', 'scalar', 'product', 'none'] = "scalar",
                                 always_ram :bool = True):

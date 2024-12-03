@@ -63,25 +63,23 @@ class QdrantVectorStore(BaseVectorStore):
         :type default_segment_number: int
         """
         assert collection_name, "Collection name must be string"
-        self._client = QdrantClient(url = url,
+        # Inheritance
+        super().__init__(dense_embedding_model = dense_embedding_model,
+                         sparse_embedding_model = sparse_embedding_model,
+                         url = url,
+                         distance = distance,
+                         shard_number = shard_number,
+                         quantization_mode = quantization_mode,
+                         default_segment_number = default_segment_number,
+                         on_disk = on_disk,
+                         sparse_datatype = sparse_datatype)
+
+        # Init client
+        self._client = QdrantClient(url = self._url,
                                     port = port,
                                     grpc_port = grpc_port,
                                     api_key = api_key,
                                     prefer_grpc = prefer_grpc)
-        # Collection name
-        self.__collection_name = collection_name
-        # Optimization params
-        self.__on_disk = on_disk
-        self.__distance = distance
-        self.__shard_number = shard_number
-        self.__quantization_mode = quantization_mode
-        self.__default_segment_number = default_segment_number
-
-        # Embedding model
-        self.__dense_embedding_model = dense_embedding_model
-        self.__sparse_embedding_model = sparse_embedding_model
-        # Datatype
-        self._sparse_datatype = sparse_datatype
 
     def _embed_texts(self,
                      texts: list[str],
