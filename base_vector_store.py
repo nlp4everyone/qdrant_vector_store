@@ -17,8 +17,8 @@ Embedding = List[float]
 class BaseVectorStore:
     def __init__(self,
                  dense_embedding_model: Union[BaseEmbedding, Embeddings],
-                 url: str = "http://localhost:6333",
                  sparse_embedding_model: Optional[SparseTextEmbedding] = None,
+                 url: str = "http://localhost:6333",
                  collection_name: str = "qdrant_vector_store",
                  distance: models.Distance = models.Distance.COSINE,
                  shard_number: int = 2,
