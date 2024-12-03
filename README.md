@@ -21,8 +21,7 @@ pip install -r requirements.txt
 - [x] Integrate with Langchain Embedding <mark>(25/11)</mark>.
 - [x] Sparse embedding search <mark>(02/12)</mark>.
 - [x] Asynchronous Qdrant Vector Store <mark>(03/12)</mark>.
-- [ ] Build-in Hybrid Queries.
-- [ ] Quantization recheck
+- [x] Build-in Hybrid Queries <mark>(03/12)</mark>.
 - [ ] Batch search.
 - [ ] Multi-modal supports.
 <br />
