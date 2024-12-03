@@ -451,6 +451,78 @@ class QdrantVectorStore(BaseVectorStore):
         # LlamaIndex NodeWithScore case
         return self._convert_score_point_to_node_with_score(scored_points = points.points)
 
+    def batch_retrieve(self,
+                       queries: List[str],
+                       similarity_top_k: int = 3,
+                       query_filter: Optional[models.Filter] = None,
+                       score_threshold: Optional[float] = None,
+                       rescore: bool = True,
+                       mode: Literal["dense", "sparse"] = "dense",
+                       return_type: Literal["ScoredPoints", "auto"] = "auto"):
+        # Check base collection
+        status = self._client.collection_exists(self._collection_name)
+        if not status:
+            raise ValueError(f"Collection {self._collection_name} isn't existed")
+
+        # Check collection
+        count_points = self._count_points()
+        if count_points == 0:
+            raise Exception(f"Collection {self._collection_name} is empty!")
+
+        # Check config
+        config = self._collection_info()
+        # Dense config
+        dense_config = config.config.params.vectors
+        sparse_config = config.config.params.sparse_vectors
+
+        # Wrong config
+        if sparse_config == None and mode == "sparse":
+            raise ValueError(f"Sparse mode not config for {self._collection_name} collection")
+        if dense_config == None and mode == "dense":
+            raise ValueError(f"Dense mode not config for {self._collection_name} collection")
+
+        # Switch mode
+        # Get query embedding
+        if isinstance(self._dense_embedding_model, BaseEmbedding):
+            # Query embeddings
+            embeddings = [self._dense_embedding_model.get_query_embedding(query = query) for query in queries]
+        else:
+            # Query embeddings
+            embeddings = [self._dense_embedding_model.embed_query(text = query) for query in queries]
+
+        # Model name
+        model_name = list(dense_config.keys())[0]
+        # Define search queries
+        search_queries = [models.QueryRequest(query = embeddings[i],
+                                              filter = query_filter,
+                                              limit = similarity_top_k,
+                                              using = model_name,
+                                              with_payload = True,
+                                              score_threshold = score_threshold) for i in range(len(queries))]
+
+        # Retrieve points
+        scored_responses = self._client.query_batch_points(collection_name = self._collection_name,
+                                                           requests = search_queries)
+
+        final_output = []
+        # Score point
+        for response in scored_responses:
+            if return_type == "ScoredPoints":
+                # Scored Points returned format
+                scored_points = [point for point in response.points]
+            else:
+                # Get node type
+                node_type = response.points[0].payload["_node_type"]
+                if node_type == "Document":
+                    # Langchain Document case
+                    scored_points = self._convert_score_point_to_document(scored_points = response.points)
+                else:
+                    # LlamaIndex NodeWithScore case
+                    scored_points = self._convert_score_point_to_node_with_score(scored_points = response.points)
+            final_output.append(scored_points)
+        # Return
+        return final_output
+
     def _count_points(self) -> int:
         """Return the total amount of point inside collection"""
         # Check collection exist
