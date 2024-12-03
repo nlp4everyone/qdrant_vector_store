@@ -140,7 +140,7 @@ class AsyncQdrantVectorStore(BaseVectorStore):
         # When collection not existed!
         status = await self._client.collection_exists(self._collection_name)
         if not status:
-            quantization_config = self.get_quantization_config(quantization_mode = quantization_mode,
+            quantization_config = self._get_quantization_config(quantization_mode = quantization_mode,
                                                                always_ram = always_ram)
 
             # Optimizer config
@@ -251,10 +251,10 @@ class AsyncQdrantVectorStore(BaseVectorStore):
         embedding_dimension = len(embeddings[0])
 
         # Dense config
-        dense_vectors_config = self.get_dense_embedding_config(embedding_dimension = embedding_dimension,
-                                                               distance = self._distance,
-                                                               on_disk = self._on_disk,
-                                                               dense_embedding_model = self._dense_embedding_model)
+        dense_vectors_config = self._get_dense_embedding_config(embedding_dimension = embedding_dimension,
+                                                                distance = self._distance,
+                                                                on_disk = self._on_disk,
+                                                                dense_embedding_model = self._dense_embedding_model)
 
         # Define payloads
         payloads = self._convert_documents_to_payloads(documents = documents)
@@ -264,11 +264,11 @@ class AsyncQdrantVectorStore(BaseVectorStore):
         sparse_embeddings = None
         if isinstance(self._sparse_embedding_model, SparseTextEmbedding):
             # Get config
-            sparse_vectors_config = self.get_sparse_embedding_config(sparse_embedding_model = self._sparse_embedding_model,
-                                                                     datatype = self._sparse_datatype)
+            sparse_vectors_config = self._get_sparse_embedding_config(sparse_embedding_model = self._sparse_embedding_model,
+                                                                      datatype = self._sparse_datatype)
             # Get sparse embedding
-            sparse_embeddings = self.embed_sparse_text(contents = contents,
-                                                       fastembed_model = self._sparse_embedding_model)
+            sparse_embeddings = self._embed_sparse_text(contents = contents,
+                                                        fastembed_model = self._sparse_embedding_model)
 
         # Create collection if doesn't exist!
         await self._create_collection(dense_vectors_config = dense_vectors_config,

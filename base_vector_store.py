@@ -42,10 +42,10 @@ class BaseVectorStore:
         # Url
         self._url = url
         # Check health
-        if not self.check_health():
+        if not self._check_health():
             raise Exception(f"Server with url: {self._url} not available!")
 
-    def check_health(self):
+    def _check_health(self):
         try:
             # Replace with your Qdrant host and port
             health_url = f"{self._url}/collections"
@@ -59,8 +59,8 @@ class BaseVectorStore:
             return False
 
     @staticmethod
-    def get_quantization_config(quantization_mode: Literal['binary', 'scalar', 'product', 'none'] = "scalar",
-                                always_ram :bool = True):
+    def _get_quantization_config(quantization_mode: Literal['binary', 'scalar', 'product', 'none'] = "scalar",
+                                 always_ram :bool = True):
         """
         Get quantization config with mode
         :param quantization_mode: Include scalar, binary and product.
@@ -96,10 +96,10 @@ class BaseVectorStore:
         return quantization_config
 
     @staticmethod
-    def embed_sparse_text(contents :List[str],
-                          fastembed_model :SparseTextEmbedding,
-                          batch_size :int = 32,
-                          parallel :int = 1) -> List[SparseEmbedding]:
+    def _embed_sparse_text(contents :List[str],
+                           fastembed_model :SparseTextEmbedding,
+                           batch_size :int = 32,
+                           parallel :int = 1) -> List[SparseEmbedding]:
         """
 
         :param backends: Select backend for sparse embedding. Default is default (Required fastembed_model model)
@@ -113,11 +113,11 @@ class BaseVectorStore:
         return list(fastembed_model.embed(documents = contents))
 
     @staticmethod
-    def get_dense_embedding_config(embedding_dimension :int,
-                                   distance :models.Distance,
-                                   on_disk :bool,
-                                   dense_embedding_model :Union[BaseEmbedding,Embeddings],
-                                   datatype :models.Datatype = models.Datatype.FLOAT16) -> dict:
+    def _get_dense_embedding_config(embedding_dimension :int,
+                                    distance :models.Distance,
+                                    on_disk :bool,
+                                    dense_embedding_model :Union[BaseEmbedding,Embeddings],
+                                    datatype :models.Datatype = models.Datatype.FLOAT16) -> dict:
         # Define vector config
         dense_vectors_config = models.VectorParams(size = embedding_dimension,
                                                    distance = distance,
@@ -132,8 +132,8 @@ class BaseVectorStore:
         return {dense_embedding_model.model: dense_vectors_config}
 
     @staticmethod
-    def get_sparse_embedding_config(sparse_embedding_model: SparseTextEmbedding,
-                                    datatype :models.Datatype) -> dict:
+    def _get_sparse_embedding_config(sparse_embedding_model: SparseTextEmbedding,
+                                     datatype :models.Datatype) -> dict:
         # Define sparse model name
         sparse_model_name = sparse_embedding_model.model_name
         # Return config
